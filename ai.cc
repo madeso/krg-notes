@@ -30,6 +30,10 @@ enum class StopReason { completed, interrupted };
  *  * Move the agent (locomotion, navlinkgs, reactions, smart objects) (with or without combat bool)
  *  * Playing animation(and handling side effecs)
  *  * Triggering audio (barks, reactions)
+ * 
+ * Bark has tiers:
+ *  * Generic (I saw something)
+ *  * Specific (I saw a light go out over there)
 */
 struct Action
 {
@@ -124,6 +128,8 @@ struct World
     // smart objects/interactables/covers
     // global state/behavior modifiers
 
+    // object state and history for certain objects (light switches...)
+
     // shared tactical state
     // shared information system
     SharedInformation shared_information;
@@ -165,7 +171,7 @@ struct Stim
     /** The severity or scale of the stimuli.
      * Was it small, medium or large?
     */
-    float severity_or_scale;
+    float severity_or_scale; // include both (differentiate between teacup falling near me and explosion far away)
     vec3 position;
 
     // lifetime (optional)
@@ -178,6 +184,8 @@ struct Stim
 
 /** What an agent knows of the world, personal/private to the agent
  * not a blackboard, use a more explicit structure.
+ * 
+ * Know their friends and notice if someone is missing? Contains current alert status? Don't go back down to idle.
  */
 struct Knowledge
 {
@@ -196,7 +204,7 @@ struct Sensor
 /** Creates Knowledge for what the agent can see.
  * 
  * It has a set of local shapes for seeing:
- *  * long shape for distance vision
+ *  * long shape for distance vision cone+box < = so it can go wide fast but be long but not wide. Reuse frustrum?
  *  * shorter for peropheral vision
  *  * one for personal space
  * 
@@ -204,13 +212,19 @@ struct Sensor
  * 
  * Checks all registred visual objects in the world agains the shapes.
  * Objects withing the shapes can be checked for visibility using raycasts (or use navmesh line of sight).
- * Raycast to multiple bones (head, chest, elbow, knee) -> any unblocked = visible
+ * Raycast to multiple bones (head, chest, elbow, knee) -> any unblocked = "visible"
+ * 
+ * Difficulty determines detection threshold and increase rate.
+ * Target stance = determines minimum of bones visible
+ * 
  */
 struct VisualSensor : Sensor
 {
 };
 
 /** Creates Knowledge for what the agent can hear.
+ * 
+ * Enemies on screen hear better than enemies off-screen
  * 
  * A simple distance based sensor.
  * Closest point on navmesh has issues, best is to use 3d pathfinding but it might not be needed.
@@ -381,6 +395,10 @@ struct BehaviorGroup
 //      if in needs-cover-fire and needs to shoot (stim zone influence)
 //      bark: "covering!"
 //      already-shooting? just bark!
+//
+// hear a noise:
+//     bark: heard-a-noise
+//     spawn a volume to get a response (I agree, lets check it out...)
 //
 // mobile cover:
 //  attach smart object/mobile cover point to a moving object (or another player with riotshield)
