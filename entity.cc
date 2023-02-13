@@ -15,8 +15,8 @@ struct Entity
 
     // dynamically add/remove components
 
-    bool is_spatial_entity() const { return root != nullptr; }
-    SpatialComponent* root = nullptr;
+    SpatialComponent* root_component = nullptr;
+    bool is_spatial_entity() const { return root_component != nullptr; }
 
     void activate()
     {
@@ -26,6 +26,11 @@ struct Entity
         //   creates entity attachment (if required)
         // not thread safe:
         //   registers each componet with all global systems
+    }
+
+    void update(UpdateStage stage)
+    {
+        systems.update(stage);
     }
 };
 
@@ -139,36 +144,49 @@ struct Component
     virtual void on_initialize(); virtual void on_shutdown();
 };
 
+struct SkeletalMeshComponent : Component
+{
+    // property: MeshResource(defines skeleton, bindpose, inverse bindpose)
+    // init/shutdown: allocate pose storage based on mesh
+};
+
 struct SpatialComponent : Component
 {
 private:
     mat4f _local_transform;
     mat4f _global_transform;
 
-    void set_global_transform(const mat4f& m) { _global_transform = m; }
-
 public:
-    void set_local_transform(const mat4f& m) { _local_transform = m; local_transform_has_changed(); }
+    void set_local_transform(const mat4f& m) { _local_transform = m; update_world_transform(); }
     
 
     const mat4f& get_local_transform() { return _local_transform; };
     const mat4f& get_global_transform() { return _global_transform; };
 
-    void local_transform_has_changed()
+    void update_world_transform()
     {
         // calculate world transform based on world
         // update world bounds
+
         // update world transforms on children
+        for(SpatialComponent* child: children)
+        { child->update_world_transform(); }
     }
 
 private:
-    // non-inclusive
+    /// non-inclusive bounds in local space
     Obb local_bounds;
+
+    /// non-inclusive bounds in world space
     Obb world_bounds;
 
-    // parent spatial components
+    // parent spatial components + socket attachment
+    Entity* parent;
+
+    std::vector<SpatialComponent*> children;
+
     // only components that can reference other components
-    // all components in graph must belong to the same entity
+    // all components in graph must belong to the same entity (so same thread)
 };
 
 struct ComponentFactory
@@ -186,12 +204,55 @@ enum class UpdateStage
     after_physics,
     end_frame
 };
+constexpr int UpdateStageCount = UpdateStage::end_frame + 1;
+
+struct EntitySystemWithPrio
+{
+    EntitySystem* system;
+    int prio;
+};
+
+struct UpdateStageList
+{
+    std::vector<EntitySystemWithPrio> systems;
+
+    void update(UpdateStage stage)
+    {
+        for(auto& es: systems)
+        {
+            es.system->update(stage);
+        }
+    }
+
+    void add(EntitySystem* sys, int prio)
+    {
+        systems.emplace_back(sys, prio);
+    }
+
+    void remove(EntitySystem* sys)
+    {
+        swap_back_and_erase(&systems, [sys](const EntitySytemWithPrio& es) { return es.system == sys;});
+    }
+};
 
 struct EntitySystemUpdate
 {
-    void update(UpdateStage);
-    void add(EntitySystem*, UpdateStage, int prio);
-    void remove(EntitySystem*, UpdateStage, int prio);
+    std::array<UpdateStageList, UpdateStageCount> systems;
+
+    void update(UpdateStage stage)
+    {
+        systems[stage].update(stage);
+    }
+
+    void add(EntitySystem* sys, UpdateStage stage, int prio)
+    {
+        systems[stage].add(sys, prio);
+    }
+
+    void remove(EntitySystem* sys, UpdateStage stage)
+    {
+        systems[stage].remove(sys);
+    }
 };
 
 /** A local system for a entity.
@@ -203,7 +264,7 @@ struct EntitySystemUpdate
  * * It can't reference other entities
  * 
  * Examples
- *  * animation
+ *  * animation (uses animation and mesh components)
  *  * movement
  *  * targeting
  */
@@ -213,6 +274,21 @@ struct EntitySystem
     // tooling: user can see if the system is missing components 
 };
 
+
+/*
+Design thoughts: should we have a single instance or a per-entity instance.
+Currently it's written as a per-intity instance.
+
+Pro:
+* Simpler
+* We can be sure it's thread safe as it won't integrate with other streads
+
+Cons:
+* Ugly
+* Wastes memory as we need a instance of the system per entity
+
+
+*/
 
 /** A global system for the world.
  * 
@@ -232,10 +308,17 @@ struct WorldSystem
     // callback for when component is added to the world
 };
 
+struct WorldSystemUpdate
+{
+    void update(UpdateStage);
+    void add(WorldSystem*, UpdateStage, int prio);
+    void remove(WorldSystem*, UpdateStage stage);
+};
+
 struct World
 {
     EntityList entities;
-    EntitySystemUpdate systems;
+    WorldSystemUpdate systems;
 
     void update(UpdateStage s)
     {
