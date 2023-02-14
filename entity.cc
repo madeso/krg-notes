@@ -1,15 +1,25 @@
 // "ecs" strcutrure
 
-struct Guid
+namespace core
 {
-    uint8_t data[16];
-};
 
-/** A generic thing that you can't derive from.
+/// external type 
+struct Guid {};
+
+/// external type
+struct mat4f {};
+}
+
+namespace entity
+{
+
+/**
+ * A generic thing that you can't derive from.
+ * @todo flesh out documentation
 */
 struct Entity
 {
-    Guid guid;
+    core::Guid guid;
     std::vector<Component> components;
     EntitySystemUpdate systems;
 
@@ -70,16 +80,7 @@ enum class ComponentState
     initialized
 };
 
-/** Data storage.
- * 
- * Properties that define settings and resource.
- * 
- * * Components have no access to other components.
- * * Components have no access to the entity.
- * * Components have no default update.
- * * Inheritance of components is allowed.
- * * Can contain logic if needed (example: animation graph component contains everything related to the animation graph) and be viewed as a black box.
-*/
+
 struct ComponentType
 {
     HashedStringView name;
@@ -104,11 +105,16 @@ struct TYPE : ComponentType\
 };\
 constexpr TYPE NAME;
 
-/**
- * * no access to other compoennts
- * * no acess to the entity
- * * no "default" update
- * * can be inherited
+
+/** Basic data storage.
+ * 
+ * Properties that define settings and resource.
+ * 
+ * * Components have no access to other components.
+ * * Components have no access to the entity.
+ * * Components have no default update.
+ * * Inheritance of components is allowed.
+ * * Can contain logic if needed (example: animation graph component contains everything related to the animation graph) and be viewed as a black box.
  *
  * Loading state switching between @ref ComponentState
     ```graphviz
@@ -132,7 +138,7 @@ struct Component
 {
     virtual ~Component() = default;
 
-    Guid guid;
+    core::Guid guid;
 
     /// for debug and tools
     std::string name;
@@ -144,24 +150,27 @@ struct Component
     virtual void on_initialize(); virtual void on_shutdown();
 };
 
-struct SkeletalMeshComponent : Component
+namespace example
 {
-    // property: MeshResource(defines skeleton, bindpose, inverse bindpose)
-    // init/shutdown: allocate pose storage based on mesh
-};
+    struct SkeletalMeshComponent : Component
+    {
+        // property: MeshResource(defines skeleton, bindpose, inverse bindpose)
+        // init/shutdown: allocate pose storage based on mesh
+    };
+}
 
 struct SpatialComponent : Component
 {
 private:
-    mat4f _local_transform;
-    mat4f _global_transform;
+    core::mat4f _local_transform;
+    core::mat4f _global_transform;
 
 public:
-    void set_local_transform(const mat4f& m) { _local_transform = m; update_world_transform(); }
+    void set_local_transform(const core::mat4f& m) { _local_transform = m; update_world_transform(); }
     
 
-    const mat4f& get_local_transform() { return _local_transform; };
-    const mat4f& get_global_transform() { return _global_transform; };
+    const core::mat4f& get_local_transform() { return _local_transform; };
+    const core::mat4f& get_global_transform() { return _global_transform; };
 
     void update_world_transform()
     {
@@ -189,6 +198,8 @@ private:
     // all components in graph must belong to the same entity (so same thread)
 };
 
+/** Helpful factory to create Component.
+*/
 struct ComponentFactory
 {
     void add(ComponentType* name);
@@ -206,37 +217,45 @@ enum class UpdateStage
 };
 constexpr int UpdateStageCount = UpdateStage::end_frame + 1;
 
-struct EntitySystemWithPrio
-{
-    EntitySystem* system;
-    int prio;
-};
 
-struct UpdateStageList
-{
-    std::vector<EntitySystemWithPrio> systems;
-
-    void update(UpdateStage stage)
-    {
-        for(auto& es: systems)
-        {
-            es.system->update(stage);
-        }
-    }
-
-    void add(EntitySystem* sys, int prio)
-    {
-        systems.emplace_back(sys, prio);
-    }
-
-    void remove(EntitySystem* sys)
-    {
-        swap_back_and_erase(&systems, [sys](const EntitySytemWithPrio& es) { return es.system == sys;});
-    }
-};
-
+/** Updates EntitySystem in the right order.
+*/
 struct EntitySystemUpdate
 {
+    struct EntitySystemWithPrio
+    {
+        EntitySystem* system;
+        int prio;
+    };
+
+    struct UpdateStageList
+    {
+        std::vector<EntitySystemWithPrio> systems;
+
+        /*
+        design thought: should this be a regular vector sorted manually
+        or a 
+        */
+
+        void update(UpdateStage stage)
+        {
+            for(auto& es: systems)
+            {
+                es.system->update(stage);
+            }
+        }
+
+        void add(EntitySystem* sys, int prio)
+        {
+            systems.emplace_back(sys, prio);
+        }
+
+        void remove(EntitySystem* sys)
+        {
+            swap_back_and_erase(&systems, [sys](const EntitySytemWithPrio& es) { return es.system == sys;});
+        }
+    };
+
     std::array<UpdateStageList, UpdateStageCount> systems;
 
     void update(UpdateStage stage)
@@ -255,6 +274,18 @@ struct EntitySystemUpdate
     }
 };
 
+/** Required and optional components for EntitySystem and WorldSystem.
+Contains requireed and optional components for a system to work.
+With tooling a user can see if the added system is missing components.
+
+Example: Character animation system requires Animation and Skeletal Mesh and has a optional Cloth.
+*/
+struct RequiredComponents
+{
+    std::vector<ComponentType*> required;
+    std::vector<ComponentType*> optional;
+};
+
 /** A local system for a entity.
  * 
  * only one system of a specified type is allowed per entity
@@ -270,14 +301,32 @@ struct EntitySystemUpdate
  */
 struct EntitySystem
 {
-    // compoent requirements: requires and optionals for this system to work
-    // tooling: user can see if the system is missing components 
+    /// get required components
+    /// @todo move to a entity sytem type
+    virtual RequiredComponents get_requirements() = 0;
+
+    /// Called by EntitySystemUpdate
+    virtual void update(UpdateStage stage) = 0;
+
+    /*
+    design thoughts:
+    should we get a callback for each component, or a general... here is a the latest state of the components you care about
+    current setup is probably easier to implement but requirements could be different from actual usage
+
+    keep in mind that the system is per entity so it's just getting references to components and storing them as member variables
+    */
+
+    /// a component was added or activated on the entity
+    virtual void component_was_added(Component* c) = 0;
+
+    /// a component was removed or deactivated on the entity
+    virtual void component_was_removed(Component* c) = 0;
 };
 
 
 /*
 Design thoughts: should we have a single instance or a per-entity instance.
-Currently it's written as a per-intity instance.
+Currently it's written as a per-entity instance.
 
 Pro:
 * Simpler
@@ -305,9 +354,21 @@ Cons:
 */
 struct WorldSystem
 {
-    // callback for when component is added to the world
+    /// get required components
+    virtual RequiredComponents get_requirements() = 0;
+
+    /// Called by WorldSystemUpdate
+    virtual void update(UpdateStage stage) = 0;
+
+    /// a component was added or activated on a entity
+    virtual void component_was_added(Entity* ent, Component* c) = 0;
+
+    /// a component was removed or deactivated on a entity
+    virtual void component_was_removed(Entity* ent, Component* c) = 0;
 };
 
+/** Updates WorldSystem.
+*/
 struct WorldSystemUpdate
 {
     void update(UpdateStage);
@@ -326,3 +387,6 @@ struct World
         systems.update(s); // sequential, can use worker threads if needed
     }
 };
+
+}
+
