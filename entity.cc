@@ -169,14 +169,6 @@ struct Component
     virtual void on_initialize(); virtual void on_shutdown();
 };
 
-namespace example
-{
-    struct SkeletalMeshComponent : Component
-    {
-        // property: MeshResource(defines skeleton, bindpose, inverse bindpose)
-        // init/shutdown: allocate pose storage based on mesh
-    };
-}
 
 struct SpatialComponent : Component
 {
@@ -430,6 +422,64 @@ struct World
         systems.update(s);
     }
 };
+
+namespace example
+{
+
+struct AnimationGraphComponent
+{
+    Skeleton* skeleton;
+    Pose calc_pose();
+};
+struct SkeletalMeshComponent
+{
+    // property: MeshResource(defines skeleton, bindpose, inverse bindpose)
+    // init/shutdown: allocate pose storage based on mesh
+
+    Skeleton* skeleton;
+    void set_pose(const Pose& pose);
+};
+
+/** Example demonstrating a EnitySystem.
+ * * Animation system is repsonsible for executing animation tasks and trasferring
+ * the results to the skeletal mesh component
+ * * Domain specific logic sis kept within the indivual components
+ * * The logic for what updates and what data to transfer is in the system.
+*/
+struct SimpleAnimationSystem : EntitySystem
+{
+    AnimationGraphComponent* animation_graph;
+    SkeletalMeshComponent* mesh;
+
+    void update(UpdateStage) override
+    {
+        if(animation_graph->skeleton == mesh->skeleton)
+        {
+            mesh->set_pose(animation_graph->calc_pose());
+        }
+    }
+};
+
+/// can have multiple meshes, or let the animationgraph return multiple poses/skeletons (custmization system)
+struct SimpleAnimationSystem : EntitySystem
+{
+    AnimationGraphComponent* animation_graph;
+    std::vector<SkeletalMeshComponent*> meshes;
+
+    void update(UpdateStage) override
+    {
+        auto pose = animation_graph->calc_pose();
+        for(SkeletalMeshComponent* mesh: meshes)
+        {
+            if(animation_graph->skeleton == mesh->skeleton)
+            {
+                mesh->set_pose(pose);
+            }
+        }
+    }
+};
+
+}
 
 }
 
