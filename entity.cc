@@ -170,6 +170,11 @@ struct Component
 };
 
 
+/**
+ * This is the only components that can reference other components.
+ * All components in graph must belong to the same entity (so same thread), with the exception of spatial entities that are attached to other spatial entitites.
+ * It's still safe since it's hidden from the user and sheduling ensures it's updated in order and on the same thread.
+*/
 struct SpatialComponent : Component
 {
 private:
@@ -206,11 +211,6 @@ private:
     /// can reference other spatial components: https://youtu.be/jjEsB611kxs?t=6639
     /// @todo find out if this can reference entities in other components or not
     std::vector<SpatialComponent*> children;
-
-    // only components that can reference other components
-    // all components in graph must belong to the same entity (so same thread)
-
-    
 };
 
 /** Helpful factory to create Component.
