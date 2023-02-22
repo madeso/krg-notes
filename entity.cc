@@ -3,6 +3,8 @@
 #include <string>
 #include <cassert>
 #include <array>
+#include <algorithm>
+
 
 namespace core
 {
@@ -23,10 +25,34 @@ namespace core
 
 namespace entity
 {
+
+
+
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // forward declare
+
+    struct EntitySystemWithPrio;
+    struct EntitySystemUpdateStageList;
+    struct EntitySystemUpdate;
+    struct Entity;
+    struct ComponentType;
     struct Component;
     struct SpatialComponent;
+    struct ComponentFactory;
+    struct RequestedComponents;
     struct EntitySystem;
+    struct WorldSystem;
     struct WorldSystemUpdate;
+    struct EntityList;
+    struct World;
+
+
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // enums
 
     enum class UpdateStage
     {
@@ -69,13 +95,14 @@ namespace entity
     };
 
 
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // "headers"
+
     struct EntitySystemWithPrio
     {
-        constexpr EntitySystemWithPrio(EntitySystem* s, int p)
-            : system(s)
-            , prio(p)
-        {
-        }
+        EntitySystemWithPrio(EntitySystem* s, int p);
 
         EntitySystem* system;
         int prio;
@@ -83,16 +110,13 @@ namespace entity
 
     struct EntitySystemUpdateStageList
     {
-        std::vector<EntitySystemWithPrio> systems;
-
-        /*
-        design thought: should this be a regular vector sorted manually
-        or a 
-        */
-
         void update(UpdateStage stage);
         void add(EntitySystem* sys, int prio);
         void remove(EntitySystem* sys);
+
+    private:
+        std::vector<EntitySystemWithPrio> systems;
+        // can't iterate a std::priority_queue so let's not use that for now
     };
 
     /** Updates EntitySystem in the right order.
@@ -105,6 +129,9 @@ namespace entity
         void add(EntitySystem* sys, UpdateStage stage, int prio);
         void remove(EntitySystem* sys, UpdateStage stage);
     };
+
+    using ComponentId = std::size_t;
+    using EntityId = std::size_t;
 
 
     /**
@@ -119,7 +146,7 @@ namespace entity
 
         // dynamically add/remove components
 
-        SpatialComponent* root_component = nullptr;
+        Component* root_component = nullptr;
         bool is_spatial_entity() const { return root_component != nullptr; }
 
         /** Turn the enity on in the world.
@@ -155,11 +182,7 @@ namespace entity
         void unload();
     };
 
-    void attach(Entity* parent, Entity* child)
-    {
-        assert(parent->is_spatial_entity() && child->is_spatial_entity());
-        // ...
-    }
+    void attach(World* world, EntityId parent_id, EntityId child_id);
 
 
     struct ComponentType
@@ -257,7 +280,9 @@ namespace entity
 
             // update world transforms on children
             for(SpatialComponent* child: children)
-            { child->update_world_transform(); }
+            {
+                child->update_world_transform();
+            }
         }
 
     private:
@@ -279,8 +304,8 @@ namespace entity
     */
     struct ComponentFactory
     {
-        void add(ComponentType* name);
-        ComponentType* from_name(core::HashedStringView name);
+        void add(const ComponentType* name);
+        const ComponentType* from_name(core::HashedStringView name);
         Component* create(ComponentType* name);
     };
 
@@ -293,8 +318,8 @@ namespace entity
     */
     struct RequestedComponents
     {
-        std::vector<ComponentType*> required;
-        std::vector<ComponentType*> optional;
+        std::vector<const ComponentType*> required;
+        std::vector<const ComponentType*> optional;
     };
 
     /** A local system for a entity.
@@ -424,8 +449,25 @@ namespace entity
         }
     };
 
+
+
+
+
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    // implement
+    // Implementations
+
+    // ------------------------------------------------------------------------
+    // EntitySystemWithPrio
+
+    EntitySystemWithPrio::EntitySystemWithPrio(EntitySystem* s, int p)
+        : system(s)
+        , prio(p)
+    {
+    }
+
+
+    // ------------------------------------------------------------------------
+    // EntitySystemUpdateStageList
 
     void EntitySystemUpdateStageList::update(UpdateStage stage)
     {
@@ -438,6 +480,10 @@ namespace entity
     void EntitySystemUpdateStageList::add(EntitySystem* sys, int prio)
     {
         systems.emplace_back(sys, prio);
+        std::sort(systems.begin(), systems.end(), [](const auto& lhs, const auto& rhs)
+        {
+            return lhs.prio < rhs.prio;
+        });
     }
 
     void EntitySystemUpdateStageList::remove(EntitySystem* sys)
@@ -445,8 +491,10 @@ namespace entity
         swap_back_and_erase(&systems, [sys](const EntitySystemWithPrio& es) { return es.system == sys;});
     }
 
+
     // ------------------------------------------------------------------------
-    
+    // EntitySystemUpdate
+
     void EntitySystemUpdate::update(UpdateStage stage)
     {
         systems[static_cast<std::size_t>(stage)].update(stage);
@@ -462,7 +510,52 @@ namespace entity
         systems[static_cast<std::size_t>(stage)].remove(sys);
     }
 
+
     // ------------------------------------------------------------------------
+    // Entity
+
+    // ------------------------------------------------------------------------
+    // ComponentType
+
+    // ------------------------------------------------------------------------
+    // Component
+
+    // ------------------------------------------------------------------------
+    // SpatialComponent
+
+    void attach(World* world, Entity* parent, Entity* child)
+    {
+        assert(parent->is_spatial_entity() && child->is_spatial_entity());
+        // ...
+    }
+
+    // ------------------------------------------------------------------------
+    // ComponentFactory
+
+    // ------------------------------------------------------------------------
+    // RequestedComponents
+
+    // ------------------------------------------------------------------------
+    // EntitySystem
+
+    // ------------------------------------------------------------------------
+    // WorldSystem
+
+    // ------------------------------------------------------------------------
+    // WorldSystemUpdate
+
+    // ------------------------------------------------------------------------
+    // EntityList
+
+    // ------------------------------------------------------------------------
+    // World
+
+
+
+    
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // Examples
 
     namespace example
     {
