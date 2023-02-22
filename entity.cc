@@ -37,13 +37,17 @@ namespace entity
     struct EntitySystemUpdateStageList;
     struct EntitySystemUpdate;
     struct Entity;
-    struct ComponentType;
     struct Component;
+        struct ComponentType;
+        struct ComponentFactory;
     struct SpatialComponent;
-    struct ComponentFactory;
     struct RequestedComponents;
     struct EntitySystem;
+        struct EntitySystemType;
+        struct EntitySystemFactory;
     struct WorldSystem;
+        struct WorldSystemType;
+        struct WorldSystemFactory;
     struct WorldSystemUpdate;
     struct EntityList;
     struct World;
@@ -185,31 +189,6 @@ namespace entity
     void attach(World* world, EntityId parent_id, EntityId child_id);
 
 
-    struct ComponentType
-    {
-        core::HashedStringView name;
-        
-        /// can the enttity have many components of this type
-        bool max_one_per_entity;
-
-        virtual Component* create() = 0;
-    };
-
-    /** Creates a new componet type for built-in components.
-     * 
-     * ```
-     * CUSTOM_COMPONENT(CustomComponent, custom, "custom-name");
-     * ```
-    */
-    #define CUSTOM_COMPONENT(TYPE, NAME, HASH)\
-    struct TYPE : ComponentType\
-    {\
-        constexpr TYPE() : ComponentType{HASH} {}\
-        Component* create() const override;\
-    };\
-    constexpr TYPE NAME;
-
-
     /** Basic data storage.
      * 
      * Properties that define settings and resource.
@@ -252,6 +231,39 @@ namespace entity
 
         virtual void on_load(); virtual void on_unload();
         virtual void on_initialize(); virtual void on_shutdown();
+    };
+
+
+    struct ComponentType
+    {
+        core::HashedStringView name;
+        
+        /// can the enttity have many components of this type
+        bool max_one_per_entity;
+
+        virtual Component* create() = 0;
+    };
+
+    /** Creates a new componet type for built-in components.
+     * 
+     * ```
+     * CUSTOM_COMPONENT(CustomComponent, custom, "custom-name");
+     * ```
+    */
+    #define CUSTOM_COMPONENT(TYPE, NAME, HASH)\
+    struct TYPE : ComponentType\
+    {\
+        constexpr TYPE() : ComponentType{HASH} {}\
+        Component* create() const override;\
+    };\
+    constexpr TYPE NAME;
+
+    /** Helpful factory to create Component.
+    */
+    struct ComponentFactory
+    {
+        void add(const ComponentType* name);
+        const ComponentType* from_name(core::HashedStringView name);
     };
 
 
@@ -298,15 +310,6 @@ namespace entity
         /// can reference other spatial components: https://youtu.be/jjEsB611kxs?t=6639
         /// @todo find out if this can reference entities in other components or not
         std::vector<SpatialComponent*> children;
-    };
-
-    /** Helpful factory to create Component.
-    */
-    struct ComponentFactory
-    {
-        void add(const ComponentType* name);
-        const ComponentType* from_name(core::HashedStringView name);
-        Component* create(ComponentType* name);
     };
 
 
@@ -366,6 +369,23 @@ namespace entity
     };
 
 
+    struct EntitySystemType
+    {
+        core::HashedStringView name;
+
+        EntitySystemType(core::HashedStringView);
+        virtual ~EntitySystemType() = default;
+
+        virtual EntitySystem* create() = 0;
+    };
+
+    struct EntitySystemFactory
+    {
+        void add(const EntitySystemType* name);
+        const EntitySystemType* from_name(core::HashedStringView name);
+    };
+
+
     /*
     Design thoughts: should we have a single instance or a per-entity instance.
     Currently it's written as a per-entity instance.
@@ -419,6 +439,22 @@ namespace entity
         virtual void component_was_removed(Entity* ent, Component* c) = 0;
     };
 
+    struct WorldSystemType
+    {
+        core::HashedStringView name;
+
+        WorldSystemType(core::HashedStringView);
+        virtual ~WorldSystemType() = default;
+
+        virtual WorldSystem* create() = 0;
+    };
+
+    struct WorldSystemFactory
+    {
+        void add(const WorldSystemType* name);
+        const WorldSystemType* from_name(core::HashedStringView name);
+    };
+
     /** Updates WorldSystem.
     */
     struct WorldSystemUpdate
@@ -430,21 +466,18 @@ namespace entity
         void remove(WorldSystem*, UpdateStage stage);
     };
 
-    struct EntityList
-    {
-        /// parallelized, spatial parent is updated before child (worker threads: nuber of cores - 1)
-        /// place attached entities on the same thread as parent, schedule parent to update before the child
-        void update(UpdateStage stage);
-    };
-
     struct World
     {
-        EntityList entities;
+        std::vector<Entity> entities;
         WorldSystemUpdate systems;
+
+        /// parallelized, spatial parent is updated before child (worker threads: nuber of cores - 1)
+        /// place attached entities on the same thread as parent, schedule parent to update before the child
+        void update_entitites(UpdateStage stage);
 
         void update(UpdateStage s)
         {
-            entities.update(s);
+            update_entitites(s);
             systems.update(s);
         }
     };
@@ -512,10 +545,26 @@ namespace entity
 
 
     // ------------------------------------------------------------------------
-    // Entity
+    // ComponentType
 
     // ------------------------------------------------------------------------
-    // ComponentType
+    // ComponentFactory
+
+    // ------------------------------------------------------------------------
+    // EntitySystemType
+
+    // ------------------------------------------------------------------------
+    // EntitySystemFactory
+
+    // ------------------------------------------------------------------------
+    // WorldSystemType
+
+    // ------------------------------------------------------------------------
+    // WorldSystemFactory
+
+
+    // ------------------------------------------------------------------------
+    // Entity
 
     // ------------------------------------------------------------------------
     // Component
@@ -528,9 +577,6 @@ namespace entity
         assert(parent->is_spatial_entity() && child->is_spatial_entity());
         // ...
     }
-
-    // ------------------------------------------------------------------------
-    // ComponentFactory
 
     // ------------------------------------------------------------------------
     // RequestedComponents
@@ -556,7 +602,7 @@ namespace entity
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // Examples
-
+#if 0
     namespace example
     {
         struct Skeleton {};
@@ -615,6 +661,7 @@ namespace entity
             }
         };
     }
+#endif
 }
 
 int main(int arc, char** argv)
