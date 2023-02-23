@@ -4,6 +4,8 @@
 #include <cassert>
 #include <array>
 #include <algorithm>
+#include <string_view>
+#include <unordered_map>
 
 
 namespace core
@@ -17,7 +19,8 @@ namespace core
     /// external type
     struct Obb {};
 
-    struct HashedStringView {};
+    // struct HashedStringView {};
+    using HashedStringView = std::string_view;
 
     /// temporary hack for the compiler
     #define swap_back_and_erase(...) do {} while(false)
@@ -263,7 +266,9 @@ namespace entity
     struct ComponentFactory
     {
         void add(const ComponentType* name);
-        const ComponentType* from_name(core::HashedStringView name);
+        const ComponentType* from_name_or_null(core::HashedStringView name) const;
+    private:
+        std::unordered_map<core::HashedStringView, const ComponentType*> types;
     };
 
 
@@ -381,8 +386,11 @@ namespace entity
 
     struct EntitySystemFactory
     {
-        void add(const EntitySystemType* name);
-        const EntitySystemType* from_name(core::HashedStringView name);
+        void add(const EntitySystemType* ny);
+        const EntitySystemType* from_name_or_null(core::HashedStringView name);
+
+    private:
+        std::unordered_map<core::HashedStringView, const EntitySystemType*> types;
     };
 
 
@@ -451,8 +459,11 @@ namespace entity
 
     struct WorldSystemFactory
     {
-        void add(const WorldSystemType* name);
-        const WorldSystemType* from_name(core::HashedStringView name);
+        void add(const WorldSystemType* ty);
+        const WorldSystemType* from_name_or_null(core::HashedStringView name);
+
+    private:
+        std::unordered_map<core::HashedStringView, const WorldSystemType*> types;
     };
 
     /** Updates WorldSystem.
@@ -550,17 +561,53 @@ namespace entity
     // ------------------------------------------------------------------------
     // ComponentFactory
 
+    void ComponentFactory::add(const ComponentType* ty)
+    {
+        types.insert({ty->name, ty});
+    }
+    
+    const ComponentType* ComponentFactory::from_name_or_null(core::HashedStringView name) const
+    {
+        auto found = types.find(name);
+        if(found != types.end()) { return found->second; }
+        else { return nullptr; }
+    }
+
     // ------------------------------------------------------------------------
     // EntitySystemType
 
     // ------------------------------------------------------------------------
     // EntitySystemFactory
+    void EntitySystemFactory::add(const EntitySystemType* ty)
+    {
+        types.insert({ty->name, ty});
+    }
+
+    const EntitySystemType* EntitySystemFactory::from_name_or_null(core::HashedStringView name)
+    {
+        auto found = types.find(name);
+        if(found != types.end()) { return found->second; }
+        else { return nullptr; }
+    }
 
     // ------------------------------------------------------------------------
     // WorldSystemType
 
     // ------------------------------------------------------------------------
     // WorldSystemFactory
+
+    
+    void WorldSystemFactory::add(const WorldSystemType* ty)
+    {
+        types.insert({ty->name, ty});
+    }
+
+    const WorldSystemType* WorldSystemFactory::from_name_or_null(core::HashedStringView name)
+    {
+        auto found = types.find(name);
+        if(found != types.end()) { return found->second; }
+        else { return nullptr; }
+    }
 
 
     // ------------------------------------------------------------------------
