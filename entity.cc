@@ -137,9 +137,6 @@ namespace entity
         void remove(EntitySystem* sys, UpdateStage stage);
     };
 
-    using ComponentId = std::size_t;
-    using EntityId = std::size_t;
-
 
     /**
      * A generic thing that you can't derive from.
@@ -189,7 +186,7 @@ namespace entity
         void unload();
     };
 
-    void attach(World* world, EntityId parent_id, EntityId child_id);
+    void attach(World* world, Entity* parent_id, Entity* child_id);
 
 
     /** Basic data storage.
