@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
+#include <memory>
 
 
 namespace core
@@ -21,6 +22,34 @@ namespace core
 
     // struct HashedStringView {};
     using HashedStringView = std::string_view;
+
+    template<typename T, typename F>
+    void update_and_erase(std::vector<T>* asrc, F&& update)
+    {
+        assert(asrc);
+        std::vector<T>& src = *asrc;
+
+        std::size_t index = 0;
+        std::size_t count = src.size();
+        while(index < count)
+        {
+            const bool remove = update(src[index]);
+            if(remove)
+            {
+                const auto last_index = count-1;
+                if(index != last_index)
+                {
+                    std::swap(src[index], src[last_index]);
+                }
+                count -= 1;
+                src.pop_back();
+            }
+            else
+            {
+                index += 1;
+            }
+        }
+    }
 
     /// temporary hack for the compiler
     #define swap_back_and_erase(...) do {} while(false)
@@ -39,6 +68,11 @@ namespace entity
     struct EntitySystemWithPrio;
     struct EntitySystemUpdateStageList;
     struct EntitySystemUpdate;
+
+    struct WorldSystemWithPrio;
+    struct WorldSystemUpdateStageList;
+    struct WorldSystemUpdate;
+
     struct Entity;
     struct Component;
         struct ComponentType;
@@ -51,8 +85,6 @@ namespace entity
     struct WorldSystem;
         struct WorldSystemType;
         struct WorldSystemFactory;
-    struct WorldSystemUpdate;
-    struct EntityList;
     struct World;
 
 
@@ -107,6 +139,52 @@ namespace entity
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // "headers"
 
+    struct Alive
+    {
+        void kill();
+        void update_for_frame();
+
+        bool is_pending_removal() const;
+        bool delete_owner() const;
+    private:
+        int health = 0;
+    };
+
+
+    // assume there's a Alive called alive on T
+    template<typename T>
+    void update_and_remove_alives
+    (
+        std::vector<std::unique_ptr<T>>* alives,
+        std::vector<std::unique_ptr<T>>* deads
+    )
+    {
+        core::update_and_erase(deads,
+            [](std::unique_ptr<T>& c) -> bool
+            {
+                c->alive.update_for_frame();
+                return c->alive.delete_owner();
+            }
+        );
+        core::update_and_erase(alives,
+            [deads](std::unique_ptr<T>& c) -> bool
+            {
+                c->alive.update_for_frame();
+                if(c->alive.is_pending_removal())
+                {
+                    // move to dead to keep alive for a few more frames
+                    deads->emplace_back(std::move(c));
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        );
+    }
+
+
     struct EntitySystemWithPrio
     {
         EntitySystemWithPrio(EntitySystem* s, int p);
@@ -145,7 +223,8 @@ namespace entity
     struct Entity
     {
         core::Guid guid;
-        std::vector<Component*> components;
+        std::vector<std::unique_ptr<Component>> components;
+        std::vector<std::unique_ptr<Component>> dead_components;
         EntitySystemUpdate systems;
 
         // dynamically add/remove components
@@ -174,16 +253,15 @@ namespace entity
         /// Turn the entity off, remove entity from all systems
         void deactive();
 
-        void update(UpdateStage stage)
-        {
-            systems.update(stage);
-        }
+        void update(UpdateStage stage);
 
         /// Load all components (resource, memory...)
         void load();
 
         /// Unload all components (resource, memory...)
         void unload();
+
+        Alive alive;
     };
 
     void attach(World* world, Entity* parent_id, Entity* child_id);
@@ -226,6 +304,8 @@ namespace entity
         /// for debug and tools
         std::string name;
 
+        Alive alive;
+
         // settings that are serialized
         // resources that are loaded
 
@@ -254,7 +334,7 @@ namespace entity
     struct TYPE : ComponentType\
     {\
         constexpr TYPE() : ComponentType{HASH} {}\
-        Component* create() const override;\
+        std::unique_ptr<Component> create() const override;\
     };\
     constexpr TYPE NAME;
 
@@ -378,7 +458,7 @@ namespace entity
         EntitySystemType(core::HashedStringView);
         virtual ~EntitySystemType() = default;
 
-        virtual EntitySystem* create() = 0;
+        virtual std::unique_ptr<EntitySystem> create() = 0;
     };
 
     struct EntitySystemFactory
@@ -451,7 +531,7 @@ namespace entity
         WorldSystemType(core::HashedStringView);
         virtual ~WorldSystemType() = default;
 
-        virtual WorldSystem* create() = 0;
+        virtual std::unique_ptr<WorldSystem> create() = 0;
     };
 
     struct WorldSystemFactory
@@ -463,31 +543,45 @@ namespace entity
         std::unordered_map<core::HashedStringView, const WorldSystemType*> types;
     };
 
+    struct WorldSystemWithPrio
+    {
+        WorldSystemWithPrio(WorldSystem* s, int p);
+
+        WorldSystem* system;
+        int prio;
+    };
+
+    struct WorldSystemUpdateStageList
+    {
+        void update(UpdateStage stage);
+        void add(WorldSystem* sys, int prio);
+        void remove(WorldSystem* sys);
+
+    private:
+        std::vector<WorldSystemWithPrio> systems;
+    };
+
     /** Updates WorldSystem.
     */
     struct WorldSystemUpdate
     {
-        // sequential, can use worker threads if needed
         void update(UpdateStage);
 
         void add(WorldSystem*, UpdateStage, int prio);
         void remove(WorldSystem*, UpdateStage stage);
+
+    private:
+        std::array<WorldSystemUpdateStageList, UpdateStageCount> systems;
     };
 
     struct World
     {
-        std::vector<Entity> entities;
-        WorldSystemUpdate systems;
+        void update(UpdateStage s);
 
-        /// parallelized, spatial parent is updated before child (worker threads: nuber of cores - 1)
-        /// place attached entities on the same thread as parent, schedule parent to update before the child
-        void update_entitites(UpdateStage stage);
-
-        void update(UpdateStage s)
-        {
-            update_entitites(s);
-            systems.update(s);
-        }
+    private:
+        std::vector<std::unique_ptr<Entity>> entities;
+        std::vector<std::unique_ptr<WorldSystem>> systems;
+        WorldSystemUpdate system_update;
     };
 
 
@@ -496,6 +590,33 @@ namespace entity
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // Implementations
+
+    void Alive::kill()
+    {
+        if(health == 0)
+        {
+            health = 1;
+        }
+    }
+
+    void Alive::update_for_frame()
+    {
+        if(health > 0)
+        {
+            health += 1;
+        }
+    }
+
+    bool Alive::is_pending_removal() const
+    {
+        return health > 0;
+    }
+
+    bool Alive::delete_owner() const
+    {
+        return health > 10;
+    }
+
 
     // ------------------------------------------------------------------------
     // EntitySystemWithPrio
@@ -557,7 +678,6 @@ namespace entity
 
     // ------------------------------------------------------------------------
     // ComponentFactory
-
     void ComponentFactory::add(const ComponentType* ty)
     {
         types.insert({ty->name, ty});
@@ -592,8 +712,6 @@ namespace entity
 
     // ------------------------------------------------------------------------
     // WorldSystemFactory
-
-    
     void WorldSystemFactory::add(const WorldSystemType* ty)
     {
         types.insert({ty->name, ty});
@@ -610,6 +728,17 @@ namespace entity
     // ------------------------------------------------------------------------
     // Entity
 
+    void Entity::update(UpdateStage stage)
+    {
+        systems.update(stage);
+
+        if(stage == UpdateStage::end_frame)
+        {
+            alive.update_for_frame();
+            update_and_remove_alives(&components, &dead_components);
+        }
+    }
+
     // ------------------------------------------------------------------------
     // Component
 
@@ -619,7 +748,7 @@ namespace entity
     void attach(World* world, Entity* parent, Entity* child)
     {
         assert(parent->is_spatial_entity() && child->is_spatial_entity());
-        // ...
+        // todo(Gustav): implement attachments
     }
 
     // ------------------------------------------------------------------------
@@ -632,14 +761,73 @@ namespace entity
     // WorldSystem
 
     // ------------------------------------------------------------------------
-    // WorldSystemUpdate
+    // WorldSystemWithPrio
+    WorldSystemWithPrio::WorldSystemWithPrio(WorldSystem* s, int p)
+        : system(s)
+        , prio(p)
+    {
+    }
 
     // ------------------------------------------------------------------------
-    // EntityList
+    // WorldSystemUpdateStageList
+    void WorldSystemUpdateStageList::update(UpdateStage stage)
+    {
+        for(auto& es: systems)
+        {
+            es.system->update(stage);
+        }
+    }
+
+    void WorldSystemUpdateStageList::add(WorldSystem* sys, int prio)
+    {
+        systems.emplace_back(sys, prio);
+        std::sort(systems.begin(), systems.end(), [](const auto& lhs, const auto& rhs)
+        {
+            return lhs.prio < rhs.prio;
+        });
+    }
+
+    void WorldSystemUpdateStageList::remove(WorldSystem* sys)
+    {
+        swap_back_and_erase(&systems, [sys](const WorldSystemWithPrio& es) { return es.system == sys;});
+    }
+
+    // ------------------------------------------------------------------------
+    // WorldSystemUpdate
+
+    void WorldSystemUpdate::update(UpdateStage stage)
+    {
+        systems[static_cast<std::size_t>(stage)].update(stage);
+    }
+
+    void WorldSystemUpdate::add(WorldSystem* system, UpdateStage stage, int prio)
+    {
+        systems[static_cast<std::size_t>(stage)].add(system, prio);
+    }
+
+    void WorldSystemUpdate::remove(WorldSystem* system, UpdateStage stage)
+    {
+        systems[static_cast<std::size_t>(stage)].remove(system);
+    }
 
     // ------------------------------------------------------------------------
     // World
 
+    void World::update(UpdateStage stage)
+    {
+        // todo(Gustav): implement threading for entity
+        // todo(Gustav): take care of updating parent before child
+        // parallelized, spatial parent is updated before child (worker threads: nuber of cores - 1)
+        // place attached entities on the same thread as parent, schedule parent to update before the child
+        for(auto& ent: entities)
+        {
+            ent->update(stage);
+        }
+        
+        // todo(Gustav): implement threading for world
+        // sequential, can use worker threads if needed
+        system_update.update(stage);
+    }
 
 
     
