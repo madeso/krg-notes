@@ -1,3 +1,7 @@
+// based on:
+// Game AI Basics: https://www.youtube.com/watch?v=G5A0-_4dFLg
+// Simple and Scalable Game AI Decision Making: https://www.youtube.com/watch?v=5ZXfDFb4dzc
+
 /**
  * \defgroup actuation actuation / execution / action layer
  * @{

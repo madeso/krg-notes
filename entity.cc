@@ -1,4 +1,18 @@
-// "ecs" strcutrure
+// "ecs" strcutrure: https://www.youtube.com/watch?v=jjEsB611kxs&t=7072s
+/*
+Dictionary:
+    Entity Component System
+    ECS - Individual unique entities which have components
+    ECS appear mostly in dedicated engines
+
+    Actor Component System
+    ACS - Precomposed actors with components and behaviours
+    UE uses ACS
+
+    Script Component System
+    SCS - Game objects described wholely by scripts or sometimes an amalgamation of scripts and ECS-style components
+    Unity uses SCS
+*/
 #include <vector>
 #include <string>
 #include <cassert>
@@ -50,9 +64,6 @@ namespace core
             }
         }
     }
-
-    /// temporary hack for the compiler
-    #define swap_back_and_erase(...) do {} while(false)
 }
 
 namespace entity
@@ -650,7 +661,10 @@ namespace entity
 
     void EntitySystemUpdateStageList::remove(EntitySystem* sys)
     {
-        swap_back_and_erase(&systems, [sys](const EntitySystemWithPrio& es) { return es.system == sys;});
+        core::update_and_erase(&systems,
+            [sys](const EntitySystemWithPrio& es)
+            { return es.system == sys;}
+        );
     }
 
 
