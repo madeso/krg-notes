@@ -350,6 +350,38 @@ struct State
     )
 )
 ```
+
+
+## Example: Falling sign (json)
+```json
+[script falling-sign
+    [state untouched
+        [on update
+            [when [task-complete {name: wz-post-combat}]
+                [go fallen]
+            )
+        [
+        [on hanging-from
+            [go breaking]
+        ]
+    ]
+    [state breaking
+        [on begin
+            [spawn-particles-at-joint self hinge sign-break-dust]
+            [wait-animate self sign-break]
+            [go fallen]
+       ]
+    ]
+    [state fallen
+        [on begin
+            [animate self sign-broken] // looping
+        ]
+    ]
+]
+```
+
+
+
 */
 struct Script
 {
