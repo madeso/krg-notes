@@ -1,9 +1,9 @@
 # game gui
 
 ## layout:
-* rect cut
+* [rect cut](https://halt.software/dead-simple-layouts/)
 * winforms
-* unity
+* unity: [Making UI That Looks Good In Unity](https://www.youtube.com/watch?v=HwdweCX5aMI) and [How To Get A Better Grid Layout in Unity](https://www.youtube.com/watch?v=CGsEJToeXmA)
 * java swing
 * constraint layout: [Programming a GUI Library for my New Game - YouTube](https://www.youtube.com/watch?v=d5ttbNtpgi4)
 ```java
