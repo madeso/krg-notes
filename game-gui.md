@@ -24,6 +24,11 @@ We don't have to pick one, could use more than one and with combinations
 
 ### full on parent/child tree with layout algorithm and unity-anchoring
 * unity: [Making UI That Looks Good In Unity](https://www.youtube.com/watch?v=HwdweCX5aMI) and [How To Get A Better Grid Layout in Unity](https://www.youtube.com/watch?v=CGsEJToeXmA)
+* Canvas is base, each component has a rect: `left`, `top`, `right`, `bottom`, `anchor_min_xy`, `anchor_max_xy`, `rotation`, `scale`
+* Empy/Panels can have layout
+ - `horizontal group` and `vertical group`: setting to expand spacing, resize elements, stack elements or resize [min/preferred height] info from components
+ - `layout elements`
+ - `content size fitter`
 
 
 ## layout:
