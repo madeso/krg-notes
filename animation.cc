@@ -78,6 +78,44 @@ struct Pose
 // Interpolative: blend one transform to another: translation+scale = lerp, rotation=slerp (nlerp can cause problems with low fps and helper bones)
 // Additive: Authored with a reference pose, stored as offsets that are then additive applied to the "source" pose with some percentage
 
+// sometime you might want to blend things globally
+
+struct InterpolativeBlend
+{
+    static quat rotation(quat from, quat to, float t) { return slerp(from, to, t); }
+    static vec3 translation(vec3 from, vec3 to, float t) { return lerp(from, to, t); }
+    static vec3 scale(vec2 from, vec3 to, float t) { return lerp(from, to, t); }
+};
+struct AdditiveBlend
+{
+    // operator*
+    // Concatenate the rotation of this onto rhs and return the result i.e. first rotate by rhs then by this
+    // This means order of rotation is right-to-left: child-rotation * parent-rotation
+    static quat rotation(quat from, quat to, float t) { return slerp(from, from * to, t); }
+    static vec3 translation(vec3 from, vec3 to, float t) { return to*t + from; }
+    static vec3 scale(vec2 from, vec3 to, float t) { return to*t + from; }
+};
+template<typename TBlend>
+void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMask mask, Pose* result)
+{
+    for(int bone_id: result->bone_count)
+    {
+        auto weight = calc_bone_weight(blend_weight, mask, bone_id);
+        if(weight == 0)
+        {
+            result->transform[bone_id] = source_pose.transform[bone_id];
+            continue;
+        }
+        const auto source = source_pose.transform[bone_id];
+        const auto target = target_pose.transform[bone_id];
+
+        const auto translation = TBlend::translation(source.translation, target.translation, weight);
+        const auto rotation = TBlend::rotation(source.rotation, target.rotation, weight);
+        const auto scale = TBlend::scale(source.scale, target.scale, weight);
+        result->transform[bone_id] = {translation, rotation, scale};
+    }
+}
+
 // ===========================================================================
 // Bone space: relative to parent bone
 // Character space: Relative to character root
@@ -85,4 +123,5 @@ struct Pose
 
 // Bone mask: weight per bone in the animation skeleton
 // tool support: define shoulder 100%, hand 20% and feather bones in between
+
 
