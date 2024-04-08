@@ -66,12 +66,20 @@ struct Pose
 
 
 // Animation = Set of Poses that produce motion
+// generally acceptable to change speed with 20% to match gameplay metrics
 // when imported the animation is sampled (preferable at the same fps that it was authred at)
 // common techniques: curve fitting, quantization+RLE
 // https://www.reddit.com/r/GraphicsProgramming/comments/ffhjqt/an_idiots_guide_to_animation_compression/
 // https://takinginitiative.net/2020/03/07/an-idiots-guide-to-animation-compression/
+// tldr: save animation by track each frame, if position/scale [x, y or z] is the same only serialize a constant
 
 // Sampling = read transform of the keyframes we are between and interpolate
+
+// when extracted, root motion is extracted and root is always at (0, 0, 0)
+// so we can choose to use anim or gameplay movement when animating
+// uncompressed
+// extract average velocity, total displacement, ending position and rotation, can be used for animatio nselection
+// tip: author with "ground" object to avoid fiddling with chracter root, fix in import with transform relative to root object
 
 // Blending = is roughly interpolation over time
 // Two types: Interpolative and Additive
@@ -115,6 +123,11 @@ void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMas
         result->transform[bone_id] = {translation, rotation, scale};
     }
 }
+
+// extract root motion: essentially just taking 2 positions and getting the delta
+// blending root motion: mportant to remember you're working with deltas
+// https://takinginitiative.net/2016/07/10/blending-animation-root-motion/
+// tldr: use vector slerp
 
 // ===========================================================================
 // Bone space: relative to parent bone
