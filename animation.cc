@@ -129,11 +129,6 @@ struct Animation
 
 // Sampling = read transform of the keyframes we are between and interpolate
 
-// when extracted, root motion is extracted and root is always at (0, 0, 0)
-// so we can choose to use anim or gameplay movement when animating
-// uncompressed
-// extract average velocity, total displacement, ending position and rotation, can be used for animatio nselection
-// tip: author with "ground" object to avoid fiddling with chracter root, fix in import with transform relative to root object
 
 // Blending = is roughly interpolation over time
 // Two types: Interpolative and Additive
@@ -185,9 +180,17 @@ void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMas
 }
 
 // extract root motion: essentially just taking 2 positions and getting the delta
-// blending root motion: mportant to remember you're working with deltas
+// when extracted, root motion is extracted and root is always at (0, 0, 0)
+// so we can choose to use anim or gameplay movement when animating
+
+// blending root motion: important to remember you're working with deltas
 // https://takinginitiative.net/2016/07/10/blending-animation-root-motion/
 // tldr: use vector slerp
+// root motion is uncompressed
+
+// extract average velocity, total displacement, ending position and rotation, can be used for animatio nselection
+// tip: author with "ground" object to avoid fiddling with chracter root, fix in import with transform relative to root object
+// tip: always manually animate, using a capsule representation... automatic is less smooth and fiddly
 
 // ===========================================================================
 // Bone space: relative to parent bone, "local" in DCC
@@ -198,3 +201,11 @@ void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMas
 // tool support: define shoulder 100%, hand 20% and feather bones in between
 
 
+// ===========================================================================
+// anim driven: animation drives: select animation, run physics, possible select new animation based on physics (could run into a wall), could be sluggish, animations tweak "gameplay"
+// gameplay driven: select animation based on gameplay physics
+// tip: start with gameplay driven when designing game since it's easier to tweak
+
+
+// ===========================================================================
+// events and synchronisation
