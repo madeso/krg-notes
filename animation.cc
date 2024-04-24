@@ -209,3 +209,33 @@ void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMas
 
 // ===========================================================================
 // events and synchronisation
+// need a way to annotate or add markup to animation
+// 2 types, duration(multi frame) and immediate
+// just meta data, need to be a complex type
+// when sampling all events during the update are returned
+struct EventData
+{
+    Animation* source_animation;
+    void* data;
+    float weight; // start out as 1, changed by blending
+    float percentage; // position of end point, 0-1, 1 for immediate
+    // metadata
+    bool ignored; // can for example ignore all events in a layer
+    bool trigged_by_leaving_branch; // we are transitioning away from the animaiton that triggered this event
+};
+
+// at the end of the frame forward events to consumers
+// trigger sfx/vfx, enable show/hide meshes, spawn objects, change damage shape
+// consumer can reason about what should be done, multiple foot events -> only triggger highest
+
+// additional usecase: trigger gameplay damage effect, block all transitioning
+
+// ===========================================================================
+// synchronization:
+// blend walk with jog cycle => need to control animation playback
+// solution: mark each anim has a sync track: [left down] [right passing] [right down] [left passing]
+// not track => default sync track with 1 event
+// use `Least Common Multiple` algorithm to get even number of sync frames and create virtual frames
+// length of new animation track is calculated based on blend weight
+
+
