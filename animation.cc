@@ -238,4 +238,5 @@ struct EventData
 // use `Least Common Multiple` algorithm to get even number of sync frames and create virtual frames
 // length of new animation track is calculated based on blend weight
 
+// can also blend from different animations, when blending you can say start blend between specific "track [entries]", aka start from [track] in src and sync with [another track] in dst
 
