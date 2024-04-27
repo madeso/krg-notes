@@ -240,3 +240,16 @@ struct EventData
 
 // can also blend from different animations, when blending you can say start blend between specific "track [entries]", aka start from [track] in src and sync with [another track] in dst
 
+// ===========================================================================
+// motion warping
+// modify root motion to reach a new endpoint
+// modify: example: steer walk cycle, apply rotation to movement
+// warp: warp/stetch track to reach endpoint (example: snap to open door/pull lever or climb over thing)
+
+// use events, only allow translation of xy and then only allow translation of z
+// use anchor/helper bone to find out what to sync/warp to
+
+// calculatte a warp
+// can recalc if target is moving
+
+// can use motion warping to fix motion matching
