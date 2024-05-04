@@ -14,6 +14,8 @@ void assert(bool);
 // Animation ((not just sampling and blending)
 // https://www.youtube.com/watch?v=Jkv0pbp0ckQ
 
+struct Transform { vec3 translation; quat rotation; vec3 scale; };
+
 // todo: add "generate a pose pool" somewhere
 
 // ===========================================================================
@@ -21,60 +23,55 @@ void assert(bool);
 
 // skinning = mesh vertices weighted agains some set of world space transforms ("bones")
 // all "bones" are in world space, no hierchy/skeleton
-// multipart character: mesh might not reference all core bones
-
-// deformation helper bones:
-// deformation issues is solved with procedurally calculated "deformation helper bones":
-// * roll/twist bones, that take a percent of the parent
-// * pokes
-// * look at
-// a topic of its own https://youtu.be/Jkv0pbp0ckQ?t=958
-
-// rigid strucutre solvers: 
-// static pieces that needs to be animated, based on a a set of bones, specify transform of other bones
-// * set-driven keys
-// * RBF (Radial Basis Function) solver
 
 // bind pose = position of bones when weighting vertices
 // reference/rest pose = default pose when animating
 
-// skeleton
-// core bones
-// procedurally calcualted bones, used for deformation and rendering (depending on the mesh/clothing, the number of bones could change drastically, 10-15 => 25-50)
-// * helper bones
-// * rigid structure solvers
-// needs ability to treat "body", facial and cape animations seperate. Body is blended with different animations, face is set once and cape is simulated. Easier to optimize
+// animation system needs ability to treat "body", facial and cape animations seperate. Body is blended with different animations, face is set once and cape is simulated. Easier to optimize
 
-// core "animation skeleton" defined (average male, large female, bipedal mech, horse...)
-// animators animate this skeleton using control rig
-
-// helper bones for gameplay
-// * attachment bones(holsters, weapon bones etc..)
-// * anchor bones(anchor character in environment)
-// * ik targets/offsets (environment ik)
 
 // regular mesh with animation skeleton
+// multipart character: mesh might not reference all core bones
 struct Mesh
 {
     // mesh data with weights
     // mesh skeleton
 	// mapping function that take a skellington and maps to actual bones
     // and procedurally calculate other bones
+    // procedurally calcualted bones, used for deformation and rendering (depending on the mesh/clothing, the number of bones could change drastically, 10-15 => 25-50)
 
-// why seperated? reuse anim, support different characters, multipart character/add clothing support
-// clothing can change bone count
-// torso: tank-top 10-15 bones, jacket 25-50, jacket introduce RBF
-// different render/mesh skeletons based on lod?
+    // why seperated? reuse anim, support different characters, multipart character/add clothing support
+    // clothing can change bone count
+    // torso: tank-top 10-15 bones, jacket 25-50, jacket introduce RBF
+    // different render/mesh skeletons based on lod?
+
+    // deformation helper bones:
+    // deformation issues is solved with procedurally calculated "deformation helper bones":
+    // * roll/twist bones, that take a percent of the parent
+    // * pokes
+    // * look at
+    // a topic of its own https://youtu.be/Jkv0pbp0ckQ?t=958
+
+    // rigid strucutre solvers: 
+    // static pieces that needs to be animated, based on a a set of bones, specify transform of other bones
+    // * set-driven keys
+    // * RBF (Radial Basis Function) solver
 };
 
 // gameplay/animation skeleton
 // core bones + gameplay bones (shared asset on disk: female01, male01, horse01)
+// core "animation skeleton" defined (average male, large female, bipedal mech, horse...)
+// animators animate this skeleton using control rig
+// helper bones for gameplay could be
+// * attachment bones(holsters, weapon bones etc..)
+// * anchor bones(anchor character in environment)
+// * ik targets/offsets (environment ik)
 struct Skellington
 {
 	// parent data
 };
 
-struct Transform { vec3 translation; quat rotation; vec3 scale; };
+
 // contain core bones in bone space
 using Pose = std::vector<Transform> transforms;
 
@@ -100,30 +97,38 @@ Pose sample_animation(const Animation&, float t);
 // https://www.reddit.com/r/GraphicsProgramming/comments/ffhjqt/an_idiots_guide_to_animation_compression/
 // https://takinginitiative.net/2020/03/07/an-idiots-guide-to-animation-compression/
 // tldr: save animation by track each frame, if position/scale [x, y or z] is the same only serialize a constant
-struct AnimationShared
+
+struct AnimationData
 {
 	std::vector<std::vector<float>> float_tracks;
 	std::vector<std::vector<quat>> rotation_tracks;
 };
 struct AnimationTrack
 {
-	template<typename T=float>
-	struct Data {bool single; union { T single_value; int index; } data; };
-	std::optional<Data> pos_x;
-	std::optional<Data> pos_y;
-	std::optional<Data> pos_z;
-	std::optional<Data<quat>> rotation;
-	std::optional<Data> scale_x;
-	std::optional<Data> scale_y;
-	std::optional<Data> scale_z;
+    /// Indicateds if this is a single value (only index is valid) or many (values are from index to index+length)
+	struct Data { bool single; int index; };
+
+	Data pos_x;
+	Data pos_y;
+	Data pos_z;
+	Data rotation;
+	Data scale_x;
+	Data scale_y;
+	Data scale_z;
 	
-	Transform get_transform(const AnimationShared&, int start_index, float scaled_offset);
+    /// samples a transform
+    /// start_index refer to the index into the fixed array
+   /// scaled_offset is [0-1] and how much into the start_index+1 the transform should lerped into
+	Transform get_transform(const AnimationData&, int start_index, float scaled_offset);
 };
 
 struct Animation
 {
-	AnimationShared shared;
+	AnimationData data;
 	std::vector<AnimationTrack> tracks; // per bone
+
+    // samples a pose
+	Pose get_pose(const AnimationData&, int start_index, float scaled_offset);
 };
 
 
@@ -132,17 +137,17 @@ struct Animation
 
 // Blending = is roughly interpolation over time
 // Two types: Interpolative and Additive
-// Interpolative: blend one transform to another: translation+scale = lerp, rotation=slerp (nlerp can cause problems with low fps and helper bones)
-// Additive: Authored with a reference pose, stored as offsets that are then additive applied to the "source" pose with some percentage
-
 // sometime you might want to blend things globally
 
+// Interpolative: blend one transform to another: translation+scale = lerp, rotation=slerp (nlerp can cause problems with low fps and helper bones)
 struct Blend_Interpolative
 {
     static quat rotation(quat from, quat to, float t) { return slerp(from, to, t); }
     static vec3 translation(vec3 from, vec3 to, float t) { return lerp(from, to, t); }
     static vec3 scale(vec2 from, vec3 to, float t) { return lerp(from, to, t); }
 };
+
+// Additive: Authored with a reference pose, stored as offsets that are then additive applied to the "source" pose with some percentage
 struct Blend_Additive
 {
     // operator*
