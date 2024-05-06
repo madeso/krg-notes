@@ -11,7 +11,19 @@ struct vec3{};
 struct quat{};
 void assert(bool);
 
-// Animation ((not just sampling and blending)
+/*
+# Dictionary
+* skinning = mesh vertices weighted agains some set of world space transforms ("bones"), all "bones" are in world space, no hierchy/skeleton
+* bind pose = position of bones when weighting vertices
+* reference/rest pose = default pose when animating
+* Pose = set of transformation for all bones in a skeleton
+* Animation Pose = Pose using animation skeleton, generally stored in bone space
+* Render Pose = Pose using render skeleton, generally converted to character space, and then relative to bind pose for skinning
+
+// Animation = (roughly) a set of Poses that produce motion
+
+*/
+// Animation (not just sampling and blending)
 // https://www.youtube.com/watch?v=Jkv0pbp0ckQ
 
 struct Transform { vec3 translation; quat rotation; vec3 scale; };
@@ -21,24 +33,28 @@ struct Transform { vec3 translation; quat rotation; vec3 scale; };
 // ===========================================================================
 // SKINNING
 
-// skinning = mesh vertices weighted agains some set of world space transforms ("bones")
-// all "bones" are in world space, no hierchy/skeleton
-
-// bind pose = position of bones when weighting vertices
-// reference/rest pose = default pose when animating
-
 // animation system needs ability to treat "body", facial and cape animations seperate. Body is blended with different animations, face is set once and cape is simulated. Easier to optimize
 
-
-// regular mesh with animation skeleton
-// multipart character: mesh might not reference all core bones
+/** Render Pose. */
+using CompiledPose = std::vector<mat4>;
+struct MeshPart
+{
+    // contain mesh, material, and per-vertex binding to matrix
+};
+struct MeshBone
+{
+};
+/** Regular mesh with animation skeleton.
+ Multipart character are handled via multiple meshes since they might not reference all core bones
+ */
 struct Mesh
 {
-    // mesh data with weights
-    // mesh skeleton
+    std::vector<MeshPart> parts;
+    std::vector<MeshBone> bones;
 	// mapping function that take a skellington and maps to actual bones
     // and procedurally calculate other bones
     // procedurally calcualted bones, used for deformation and rendering (depending on the mesh/clothing, the number of bones could change drastically, 10-15 => 25-50)
+    std::vector<std::pair<std::size_t, std::size_t>> copy_bones;
 
     // why seperated? reuse anim, support different characters, multipart character/add clothing support
     // clothing can change bone count
@@ -76,21 +92,14 @@ struct Skellington
 using Pose = std::vector<Transform> transforms;
 
 
-// sample source animation at some fps, function to extract pose from animation time
+// sample source animation at some fps
 // interpolate between two keyframes
-Pose sample_animation(const Animation&, float t);
+Animation sample_animation(const SourceAnimation&, float t);
 
-// another struct to contain gameplay bones?
 
 // ===========================================================================
 // ANIMATION
 
-// Pose = set of transformation for all bones in a skeleton
-// Animation Pose = Pose using animation skeleton, generally stored in bone space
-// Render Pose = Pose using render skeleton, generally converted to character space, and then relative to bind pose for skinning
-
-
-// Animation = (roughly) a set of Poses that produce motion
 // generally acceptable to change speed with 20% to match gameplay metrics
 // when imported the animation is sampled (preferable at the same fps that it was authred at)
 // common techniques: curve fitting, quantization+RLE
@@ -193,7 +202,6 @@ void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMas
 // tldr: use vector slerp
 // root motion is uncompressed
 
-// extract average velocity, total displacement, ending position and rotation, can be used for animatio nselection
 // tip: author with "ground" object to avoid fiddling with chracter root, fix in import with transform relative to root object
 // tip: always manually animate, using a capsule representation... automatic is less smooth and fiddly
 
@@ -204,6 +212,10 @@ void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMas
 
 // Bone mask: weight per bone in the animation skeleton
 // tool support: define shoulder 100%, hand 20% and feather bones in between
+struct BoneMask
+{
+    std::vector<float> weights;
+};
 
 
 // ===========================================================================
