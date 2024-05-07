@@ -1,9 +1,9 @@
 namespace std
 {
-    template <typename T>
-    struct vector{};
-
+    template <typename T> struct vector{};
+    template<typename A, typename B> struct pair {};
     template<typename T> using optional = T*;
+    using size_t = unsigned int;
 }
 template<typename T> bool is_within(T, T, T);
 struct mat4{};
@@ -37,10 +37,12 @@ struct Transform { vec3 translation; quat rotation; vec3 scale; };
 
 /** Render Pose. */
 using CompiledPose = std::vector<mat4>;
+
+/// contain mesh, material, and per-vertex binding to matrix
 struct MeshPart
 {
-    // contain mesh, material, and per-vertex binding to matrix
 };
+/// mesh specific bone for rendering
 struct MeshBone
 {
 };
@@ -51,9 +53,13 @@ struct Mesh
 {
     std::vector<MeshPart> parts;
     std::vector<MeshBone> bones;
-	// mapping function that take a skellington and maps to actual bones
-    // and procedurally calculate other bones
-    // procedurally calcualted bones, used for deformation and rendering (depending on the mesh/clothing, the number of bones could change drastically, 10-15 => 25-50)
+
+	/**
+      Add
+        - mapping function that take a skellington and maps to actual bones
+        - and procedurally calculate other bones
+        - procedurally calcualted bones, used for deformation and rendering (depending on the mesh/clothing, the number of bones could change drastically, 10-15 => 25-50)
+    */
     std::vector<std::pair<std::size_t, std::size_t>> copy_bones;
 
     // why seperated? reuse anim, support different characters, multipart character/add clothing support
@@ -89,7 +95,7 @@ struct Skellington
 
 
 // contain core bones in bone space
-using Pose = std::vector<Transform> transforms;
+using Pose = std::vector<Transform>;
 
 
 // sample source animation at some fps
