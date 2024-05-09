@@ -9,6 +9,12 @@ template<typename T> bool is_within(T, T, T);
 struct mat4{};
 struct vec3{};
 struct quat{};
+
+vec3 lerp(vec3 from, vec3 to, float t);
+quat slerp(quat from, quat to, float t);
+vec3 operator*(vec3, float);
+vec3 operator+(vec3, vec3);
+quat operator*(quat, quat);
 void assert(bool);
 
 /*
@@ -19,6 +25,9 @@ void assert(bool);
 * Pose = set of transformation for all bones in a skeleton
 * Animation Pose = Pose using animation skeleton, generally stored in bone space
 * Render Pose = Pose using render skeleton, generally converted to character space, and then relative to bind pose for skinning
+* Sampling = read transform of the keyframes we are between and interpolate
+* Blending = is roughly interpolation over time
+* Bone mask = weight per bone in the animation skeleton
 
 // Animation = (roughly) a set of Poses that produce motion
 
@@ -35,17 +44,23 @@ struct Transform { vec3 translation; quat rotation; vec3 scale; };
 
 // animation system needs ability to treat "body", facial and cape animations seperate. Body is blended with different animations, face is set once and cape is simulated. Easier to optimize
 
-/** Render Pose. */
-using CompiledPose = std::vector<mat4>;
+/// Render Pose. 
+struct CompiledPose
+{
+    /// mesh-root-space to bone-space transform
+    std::vector<mat4> transforms;
+};
 
 /// contain mesh, material, and per-vertex binding to matrix
 struct MeshPart
 {
 };
+
 /// mesh specific bone for rendering
 struct MeshBone
 {
 };
+
 /** Regular mesh with animation skeleton.
  Multipart character are handled via multiple meshes since they might not reference all core bones
  */
@@ -76,8 +91,9 @@ struct Mesh
 
     // rigid strucutre solvers: 
     // static pieces that needs to be animated, based on a a set of bones, specify transform of other bones
-    // * set-driven keys
-    // * RBF (Radial Basis Function) solver
+    // * set-driven keys (rotation/and or position linked together... when value 1 is x%, value 2..n also needs to be x%)
+    // * Weight driver: RBF (Radial Basis Function) solver
+    // * Weight driver: Vector Angle?
 };
 
 // gameplay/animation skeleton
@@ -95,7 +111,11 @@ struct Skellington
 
 
 // contain core bones in bone space
-using Pose = std::vector<Transform>;
+struct Pose
+{
+    /// local transforms
+    std::vector<Transform> transforms;
+};
 
 
 // sample source animation at some fps
@@ -147,22 +167,18 @@ struct Animation
 };
 
 
-// Sampling = read transform of the keyframes we are between and interpolate
-
-
-// Blending = is roughly interpolation over time
-// Two types: Interpolative and Additive
+// Two types of blending: Interpolative and Additive
 // sometime you might want to blend things globally
 
-// Interpolative: blend one transform to another: translation+scale = lerp, rotation=slerp (nlerp can cause problems with low fps and helper bones)
+/// Interpolative: blend one transform to another: translation+scale = lerp, rotation=slerp (nlerp can cause problems with low fps and helper bones)
 struct Blend_Interpolative
 {
     static quat rotation(quat from, quat to, float t) { return slerp(from, to, t); }
     static vec3 translation(vec3 from, vec3 to, float t) { return lerp(from, to, t); }
-    static vec3 scale(vec2 from, vec3 to, float t) { return lerp(from, to, t); }
+    static vec3 scale(vec3 from, vec3 to, float t) { return lerp(from, to, t); }
 };
 
-// Additive: Authored with a reference pose, stored as offsets that are then additive applied to the "source" pose with some percentage
+/// Additive: Authored with a reference pose, stored as offsets that are then additive applied to the "source" pose with some percentage
 struct Blend_Additive
 {
     // operator*
@@ -170,10 +186,14 @@ struct Blend_Additive
     // This means order of rotation is right-to-left: child-rotation * parent-rotation
     static quat rotation(quat from, quat to, float t) { return slerp(from, from * to, t); }
     static vec3 translation(vec3 from, vec3 to, float t) { return to*t + from; }
-    static vec3 scale(vec2 from, vec3 to, float t) { return to*t + from; }
+    static vec3 scale(vec3 from, vec3 to, float t) { return to*t + from; }
 };
 
-/// extra factors when blending, useful for "layers"
+/** Provide extra factors when blending.
+  This is useful for "layers".  Need tool support
+ - define shoulder 100%, hand 20% and feather bones in between
+ - this bone and all children 100%
+ */
 struct BoneMask { std::vector<float> mask; };
 
 template<typename TBlend>
@@ -216,12 +236,6 @@ void local_blend(Pose source_pose, Pose target_pose, float blend_weight, BoneMas
 // Character space: Relative to character root
 // World space: Relative to scene origin, "global" in DCC
 
-// Bone mask: weight per bone in the animation skeleton
-// tool support: define shoulder 100%, hand 20% and feather bones in between
-struct BoneMask
-{
-    std::vector<float> weights;
-};
 
 
 // ===========================================================================
