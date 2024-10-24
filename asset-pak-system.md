@@ -10,6 +10,20 @@
 * Blocks are loaded on a stack
 * Asset in blocks can only reference stacks loaded earlier
 
+```cpp
+struct Wad
+{
+    Texture[] textures;
+    Material[] materials;
+    Mesh[] meshes;
+    Room[] rooms;
+    PhysicsMaterial[] physics_materials;
+    Custom[] custom_data;
+}
+```
+* Need to allow custom data.
+* Can custom data extend existing types? for example adding extra data to physic materials?
+
 ## Possible setup:
 * UI assets
 * Common game assets
