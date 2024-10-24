@@ -32,6 +32,7 @@ struct Wad
 
 This allows us to easily unload assets for a specific level, loading becomes easier since we know exactly what will be loaded and can easily add a progress bar.
 
+* A full "stack" is specified and loaded, never parts of the stack (though one may use "templates" as this stack is the `"snow_level"` stack but with `"snow_01.lvl"` added ontop)
 * Streaming can be solved by temporaily allowing a branch in the stack and do the actual pop/push when switching area.
 * Asset handles need to reference the block and index and block revision. No revision on actual asset since it's part of the block.
 
