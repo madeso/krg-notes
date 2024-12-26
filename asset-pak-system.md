@@ -103,3 +103,24 @@ struct Instakill : PowerupEffect {
     }
 }
 ```
+# Data storage model
+
+```cpp
+struct Object
+{
+    GUID id; // root = 0
+    map<string, Value> properties;
+};
+
+struct Value = null, bool, double, vector3, quaternaion, string, data, guid, set<guid>
+
+
+Object root;
+```
+
+Change lists are easy to create and merge, if there is a conflict then pick latest or ask to user/highlight the change
+
+* create/destroy object
+* set property 
+* add/remove from set
+
